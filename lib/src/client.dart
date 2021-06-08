@@ -29,8 +29,8 @@ class WebDavRedirect implements Exception {
 
 class Client {
   final HttpClient httpClient = new HttpClient();
-  late String _baseUrl;
-  String _cwd = '/';
+  final int maxAttempts;
+  final int maxRedirects;
 
   /// Construct a new [Client].
   /// [path] will should be the root path you want to access.
@@ -41,9 +41,13 @@ class Client {
     String? path,
     String? protocol,
     int? port,
-  }) : assert((host.startsWith('https://') ||
+    this.maxAttempts = 5,
+    this.maxRedirects = 5,
+  })  : assert((host.startsWith('https://') ||
             host.startsWith('http://') ||
-            protocol != null)) {
+            protocol != null)),
+        assert(maxAttempts > 0),
+        assert(maxRedirects >= 0) {
     _baseUrl = (protocol != null
             ? '$protocol://$host${port != null ? ':$port' : ''}'
             : host) +
@@ -51,6 +55,9 @@ class Client {
     this.httpClient.addCredentials(
         Uri.parse(_baseUrl), '', HttpClientBasicCredentials(user, password));
   }
+
+  late String _baseUrl;
+  String _cwd = '/';
 
   /// get url from given [path]
   String getUrl(String path) =>
@@ -80,11 +87,11 @@ class Client {
       String method, String path, List<int> expectedCodes,
       {Uint8List? data, Map? headers}) async {
     return await retry(
-        () => this
-            .__send(method, path, expectedCodes, data: data, headers: headers),
+        () => this.__send(method, path, expectedCodes,
+            data: data, headers: headers, maxRedirects: maxRedirects),
         retryIf: (e) =>
             e is WebDavException && !_redirects.contains(e.statusCode),
-        maxAttempts: 5);
+        maxAttempts: maxAttempts);
   }
 
   /// send the request with given [method] and [path]
