@@ -19,6 +19,14 @@ class WebDavException implements Exception {
   String toString() => '$runtimeType - $cause, statusCode: $statusCode';
 }
 
+const _redirects = {301, 302, 303, 307, 308};
+
+class WebDavRedirect implements Exception {
+  HttpClientResponse response;
+
+  WebDavRedirect(this.response);
+}
+
 class Client {
   final HttpClient httpClient = new HttpClient();
   late String _baseUrl;
@@ -74,31 +82,73 @@ class Client {
     return await retry(
         () => this
             .__send(method, path, expectedCodes, data: data, headers: headers),
-        retryIf: (e) => e is WebDavException,
+        retryIf: (e) =>
+            e is WebDavException && !_redirects.contains(e.statusCode),
         maxAttempts: 5);
   }
 
   /// send the request with given [method] and [path]
   Future<HttpClientResponse> __send(
       String method, String path, List<int> expectedCodes,
-      {Uint8List? data, Map? headers}) async {
-    String url = this.getUrl(path);
-    print("[webdav] http send with method:$method path:$path url:$url");
+      {Uint8List? data, Map? headers, int maxRedirects = 5}) async {
+    Uri uri = Uri.parse(getUrl(path));
 
-    HttpClientRequest request =
-        await this.httpClient.openUrl(method, Uri.parse(url));
-    request
-      ..followRedirects = false
-      ..persistentConnection = true;
+    Future<HttpClientResponse> _worker() async {
+      print('[webdav] $method: $uri');
 
-    if (data != null) {
-      request.add(data);
+      HttpClientRequest request = await httpClient.openUrl(method, uri);
+      request
+        ..followRedirects = false
+        ..persistentConnection = true;
+
+      if (data != null) {
+        request.add(data);
+      }
+      if (headers != null) {
+        headers.forEach((k, v) => request.headers.add(k, v));
+      }
+
+      return request.close();
     }
-    if (headers != null) {
-      headers.forEach((k, v) => request.headers.add(k, v));
+
+    HttpClientResponse response;
+
+    final _retry = RetryOptions(maxAttempts: maxRedirects);
+    int attempt = 0;
+    while (true) {
+      attempt++;
+
+      response = await _worker();
+
+      if (_redirects.contains(response.statusCode)) {
+        if (attempt > maxRedirects) {
+          break;
+        }
+
+        // Get the redirect location
+        String? newLocation = response.headers.value('location');
+
+        if (newLocation != null && newLocation.isNotEmpty) {
+          Uri parsed = Uri.parse(newLocation);
+          if (parsed.hasScheme && parsed.origin != uri.origin) {
+            throw WebDavException('redirect origin change - $newLocation',
+                response.statusCode, method, path, expectedCodes);
+          }
+
+          // Update uri
+          uri = Uri.parse(getUrl(parsed.path));
+
+          // Sleep for a delay
+          await Future.delayed(_retry.delay(attempt));
+        } else {
+          throw WebDavException('redirect with no location',
+              response.statusCode, method, path, expectedCodes);
+        }
+      } else {
+        break;
+      }
     }
 
-    HttpClientResponse response = await request.close();
     if (!expectedCodes.contains(response.statusCode)) {
       throw WebDavException(
           "operation failed", response.statusCode, method, path, expectedCodes);
@@ -110,7 +160,7 @@ class Client {
   Future<HttpClientResponse> mkdir(String path, [bool safe = true]) {
     List<int> expectedCodes = [201];
     if (safe) {
-      expectedCodes.addAll([301, 405]);
+      expectedCodes.addAll([405]);
     }
     return this._send('MKCOL', path, expectedCodes);
   }
@@ -189,12 +239,9 @@ class Client {
 
   /// list the directories and files under given [remotePath]
   Future<List<FileInfo>> ls({String? path, int depth = 1}) async {
-    Map userHeader = {"Depth": depth};
-    HttpClientResponse response = await this
-        ._send('PROPFIND', path ?? '/', [207, 301], headers: userHeader);
-    if (response.statusCode == 301) {
-      return this.ls(path: response.headers.value('location'));
-    }
+    final userHeader = {'Depth': depth};
+    HttpClientResponse response =
+        await _send('PROPFIND', path ?? '/', [207], headers: userHeader);
     return treeFromWebDavXml(await response.transform(utf8.decoder).join());
   }
 }
