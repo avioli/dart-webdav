@@ -9,8 +9,14 @@ import 'file.dart';
 class WebDavException implements Exception {
   String cause;
   int statusCode;
+  String method;
+  String path;
+  List<int> expectedCodes;
 
-  WebDavException(this.cause, this.statusCode);
+  WebDavException(
+      this.cause, this.statusCode, this.method, this.path, this.expectedCodes);
+
+  String toString() => '$runtimeType - $cause, statusCode: $statusCode';
 }
 
 class Client {
@@ -95,10 +101,7 @@ class Client {
     HttpClientResponse response = await request.close();
     if (!expectedCodes.contains(response.statusCode)) {
       throw WebDavException(
-          "operation failed method:$method "
-          "path:$path exceptionCodes:$expectedCodes "
-          "statusCode:${response.statusCode}",
-          response.statusCode);
+          "operation failed", response.statusCode, method, path, expectedCodes);
     }
     return response;
   }
