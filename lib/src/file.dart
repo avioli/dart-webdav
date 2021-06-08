@@ -20,7 +20,8 @@ class FileInfo {
     return Uri.decodeFull(this.path.split("/").last);
   }
 
-  bool get isDirectory => this.path.endsWith("/");
+  bool get isDirectory =>
+      path.endsWith('/') || contentType == 'httpd/unix-directory' || size == '';
 
   @override
   String toString() {
@@ -40,6 +41,8 @@ String? prop(dynamic prop, String name, [String? defaultVal]) {
   return defaultVal;
 }
 
+final nullDate = DateTime.fromMillisecondsSinceEpoch(0).toIso8601String();
+
 List<FileInfo> treeFromWebDavXml(String xmlStr) {
   // Initialize a list to store the FileInfo Objects
   List<FileInfo> tree = new List.empty(growable: true);
@@ -53,27 +56,29 @@ List<FileInfo> treeFromWebDavXml(String xmlStr) {
     findElementsFromElement(
             findElementsFromElement(response, "propstat").first, "prop")
         .forEach((element) {
-      final contentLengthElements =
-          findElementsFromElement(element, "getcontentlength");
-      final contentLength = contentLengthElements.isNotEmpty
-          ? contentLengthElements.single.text
-          : "";
+      final contentLength =
+          findSingleElementFromElement(element, "getcontentlength")?.text ?? '';
 
-      final lastModifiedElements =
-          findElementsFromElement(element, "getlastmodified");
-      final lastModified = lastModifiedElements.isNotEmpty
-          ? lastModifiedElements.single.text
-          : "";
+      final creationTime =
+          findSingleElementFromElement(element, "creationdate")?.text ??
+              nullDate;
 
-      final creationTimeElements =
-          findElementsFromElement(element, "creationdate");
-      final creationTime = creationTimeElements.isNotEmpty
-          ? creationTimeElements.single.text
-          : DateTime.fromMillisecondsSinceEpoch(0).toIso8601String();
+      // TODO: fallback to creationTime?
+      final lastModified =
+          findSingleElementFromElement(element, "getlastmodified")?.text ?? '';
 
-      // Add the just found file to the tree
-      tree.add(new FileInfo(Uri.decodeComponent(davItemName), contentLength,
-          lastModified, DateTime.parse(creationTime), ""));
+      final contentType =
+          findSingleElementFromElement(element, "getcontenttype")?.text ?? '';
+
+      final item = FileInfo(
+        Uri.decodeComponent(davItemName),
+        contentLength,
+        lastModified,
+        DateTime.parse(creationTime),
+        contentType,
+      );
+
+      tree.add(item);
     });
   });
   // Remove root directory
@@ -89,3 +94,9 @@ List<xml.XmlElement> findAllElementsFromDocument(
 List<xml.XmlElement> findElementsFromElement(
         xml.XmlElement element, String tag) =>
     element.findElements(tag, namespace: '*').toList();
+
+xml.XmlElement? findSingleElementFromElement(
+    xml.XmlElement element, String tag) {
+  final el = findElementsFromElement(element, tag);
+  return el.isEmpty ? null : el.single;
+}
