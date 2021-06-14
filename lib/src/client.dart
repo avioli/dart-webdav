@@ -244,11 +244,53 @@ class Client {
     return response.transform(utf8.decoder).join();
   }
 
-  /// list the directories and files under given [remotePath]
-  Future<List<FileInfo>> ls({String? path, int depth = 1}) async {
-    final userHeader = {'Depth': depth};
+  /// Returns a [Stream] of the directories and files under given [path]
+  ///
+  /// [depth] should be either 0 or 1. A depth of 1 will cause a request to be
+  /// made to the server to also return all child resources. When depth is 0
+  /// only one item will be streamed.
+  ///
+  /// [skip] will skip a specific number of items.
+  /// Only used when depth is not 0. Defaults to 1 - skips the path itself.
+  /// No matter the skip value - the request and response will include all
+  /// items, based on depth.
+  Stream<FileInfo> propFindStream(
+      {String? path, int depth = 1, int skip = 1}) async* {
     HttpClientResponse response =
-        await _send('PROPFIND', path ?? '/', [207], headers: userHeader);
-    return treeFromWebDavXml(await response.transform(utf8.decoder).join());
+        await _send('PROPFIND', path ?? '/', [207], headers: {'Depth': depth});
+    final xml = await response.transform(utf8.decoder).join();
+    final iterator = FileInfo.parseXmlList(xml);
+    if (depth == 0) {
+      yield iterator.first;
+    } else {
+      for (final item in iterator.skip(skip)) {
+        yield item;
+      }
+    }
+  }
+
+  /// Returns a [List] of the directories and files under given [path]
+  ///
+  /// [depth] should be either 0 or 1. A depth of 1 will cause a request to be
+  /// made to the server to also return all child resources. When depth is 0
+  /// only one item will be returned.
+  ///
+  /// [skip] will skip a specific number of items.
+  /// Only used when depth is not 0. Defaults to 1 - skips the path itself.
+  /// No matter the skip value - the request and response will include all
+  /// items, based on depth.
+  Future<List<FileInfo>> propFind(
+      {String? path, int depth = 1, int skip = 1}) async {
+    return propFindStream(path: path, depth: depth, skip: skip).toList();
+  }
+
+  /// List the directories and files under given [path]
+  ///
+  /// [depth] should be either 0 or 1. A depth of 1 will cause a request to be
+  /// made to the server to also return all child resources. When depth is 0
+  /// only one item will be returned.
+  @Deprecated('Use propFind')
+  Future<List<FileInfo>> ls({String? path, int depth = 1}) async {
+    return propFind(path: path, depth: depth);
   }
 }
