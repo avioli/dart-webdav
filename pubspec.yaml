@@ -12,6 +12,8 @@ environment:
 dependencies:
   retry: ^3.1.0
   xml: ^5.0.2
+  hashcodes: ^2.0.0
+  path:
 
 dev_dependencies:
   pedantic: ^1.11.0
