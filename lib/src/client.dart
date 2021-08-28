@@ -28,9 +28,9 @@ class WebDavRedirect implements Exception {
 }
 
 class Client {
-  final HttpClient httpClient = new HttpClient();
-  final int maxAttempts;
-  final int maxRedirects;
+  HttpClient httpClient = new HttpClient();
+  int maxAttempts;
+  int maxRedirects;
 
   /// Construct a new [Client].
   /// [path] will should be the root path you want to access.
@@ -86,17 +86,20 @@ class Client {
   Future<HttpClientResponse> _send(
       String method, String path, List<int> expectedCodes,
       {Uint8List? data, Map? headers}) async {
+    final _httpClient = httpClient;
+    final _maxRedirects = maxRedirects;
+    final _maxAttempts = maxAttempts;
     return await retry(
-        () => __send(method, path, expectedCodes,
-            data: data, headers: headers, maxRedirects: maxRedirects),
+        () => __send(_httpClient, method, path, expectedCodes,
+            data: data, headers: headers, maxRedirects: _maxRedirects),
         retryIf: (e) =>
             e is WebDavException && !_redirects.contains(e.statusCode),
-        maxAttempts: maxAttempts);
+        maxAttempts: _maxAttempts);
   }
 
   /// send the request with given [method] and [path]
-  Future<HttpClientResponse> __send(
-      String method, String path, List<int> expectedCodes,
+  Future<HttpClientResponse> __send(HttpClient httpClient, String method,
+      String path, List<int> expectedCodes,
       {Uint8List? data, Map? headers, int maxRedirects = 5}) async {
     Uri uri = Uri.parse(getUrl(path));
 
