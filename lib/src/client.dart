@@ -52,7 +52,7 @@ class Client {
             ? '$protocol://$host${port != null ? ':$port' : ''}'
             : host) +
         (path ?? '');
-    this.httpClient.addCredentials(
+    httpClient.addCredentials(
         Uri.parse(_baseUrl), '', HttpClientBasicCredentials(user, password));
   }
 
@@ -87,7 +87,7 @@ class Client {
       String method, String path, List<int> expectedCodes,
       {Uint8List? data, Map? headers}) async {
     return await retry(
-        () => this.__send(method, path, expectedCodes,
+        () => __send(method, path, expectedCodes,
             data: data, headers: headers, maxRedirects: maxRedirects),
         retryIf: (e) =>
             e is WebDavException && !_redirects.contains(e.statusCode),
@@ -169,7 +169,7 @@ class Client {
     if (safe) {
       expectedCodes.addAll([405]);
     }
-    return this._send('MKCOL', path, expectedCodes);
+    return _send('MKCOL', path, expectedCodes);
   }
 
   /// just like mkdir -p
@@ -187,13 +187,13 @@ class Client {
     try {
       for (String dir in dirs) {
         try {
-          await this.mkdir(dir, true);
+          await mkdir(dir, true);
         } finally {
-          this.cd(dir);
+          cd(dir);
         }
       }
     } catch (e) {} finally {
-      this.cd(oldCwd);
+      cd(oldCwd);
     }
   }
 
@@ -209,38 +209,38 @@ class Client {
     if (safe) {
       expectedCodes.addAll([204, 404]);
     }
-    await this._send('DELETE', path, expectedCodes);
+    await _send('DELETE', path, expectedCodes);
   }
 
   /// remove dir with given [path]
   Future delete(String path) async {
-    await this._send('DELETE', path, [204]);
+    await _send('DELETE', path, [204]);
   }
 
   /// upload a new file with [localData] as content to [remotePath]
   Future _upload(Uint8List localData, String remotePath) async {
-    await this._send('PUT', remotePath, [200, 201, 204], data: localData);
+    await _send('PUT', remotePath, [200, 201, 204], data: localData);
   }
 
   /// upload a new file with [localData] as content to [remotePath]
   Future upload(Uint8List data, String remotePath) async {
-    await this._upload(data, remotePath);
+    await _upload(data, remotePath);
   }
 
   /// upload local file [path] to [remotePath]
   Future uploadFile(String path, String remotePath) async {
-    await this._upload(await File(path).readAsBytes(), remotePath);
+    await _upload(await File(path).readAsBytes(), remotePath);
   }
 
   /// download [remotePath] to local file [localFilePath]
   Future download(String remotePath, String localFilePath) async {
-    HttpClientResponse response = await this._send('GET', remotePath, [200]);
+    HttpClientResponse response = await _send('GET', remotePath, [200]);
     await response.pipe(new File(localFilePath).openWrite());
   }
 
   /// download [remotePath] and store the response file contents to String
   Future<String> downloadToBinaryString(String remotePath) async {
-    HttpClientResponse response = await this._send('GET', remotePath, [200]);
+    HttpClientResponse response = await _send('GET', remotePath, [200]);
     return response.transform(utf8.decoder).join();
   }
 
