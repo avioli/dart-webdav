@@ -29,9 +29,12 @@ class WebDavRedirect implements Exception {
 
 class Client {
   HttpClient httpClient = new HttpClient();
+
   int maxAttempts;
+
   int maxRedirects;
-  late final String rootPath;
+
+  String get rootPath => _baseUri.path;
 
   /// Construct a new [Client].
   /// [path] will should be the root path you want to access.
@@ -49,22 +52,29 @@ class Client {
             protocol != null)),
         assert(maxAttempts > 0),
         assert(maxRedirects >= 0) {
-    _baseUrl = (protocol != null
-        ? '$protocol://$host${port != null ? ':$port' : ''}'
-        : host);
-    rootPath = path ?? '';
-    httpClient.addCredentials(Uri.parse('$_baseUrl$rootPath'), '',
-        HttpClientBasicCredentials(user, password));
+    if (protocol == null) {
+      final uri = Uri.tryParse(host);
+      if (uri == null) {
+        _baseUri = Uri(host: host, port: port, path: path);
+      } else if (path != null) {
+        _baseUri = uri.replace(path: path);
+      } else {
+        _baseUri = uri;
+      }
+    } else {
+      _baseUri = Uri(scheme: protocol, host: host, port: port, path: path);
+    }
+    httpClient.addCredentials(
+        _baseUri, '', HttpClientBasicCredentials(user, password));
   }
 
-  late final String _baseUrl;
+  late final Uri _baseUri;
 
   String _cwd = '/';
 
   /// get url from given [path]
-  String getUrl(String path) => path.startsWith('/')
-      ? '$_baseUrl$rootPath$path'
-      : '$_baseUrl$rootPath$_cwd$path';
+  String getUrl(String path) =>
+      path.startsWith('/') ? '$_baseUri$path' : '$_baseUri$_cwd$path';
 
   /// change current dir to the given [path], you should make sure the dir exist
   void cd(String path) {
