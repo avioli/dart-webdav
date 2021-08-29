@@ -34,7 +34,9 @@ class Client {
 
   int maxRedirects;
 
-  String get rootPath => _baseUri.path;
+  late final Uri baseUri;
+
+  String get rootPath => baseUri.path;
 
   /// Construct a new [Client].
   /// [path] will should be the root path you want to access.
@@ -55,26 +57,24 @@ class Client {
     if (protocol == null) {
       final uri = Uri.tryParse(host);
       if (uri == null) {
-        _baseUri = Uri(host: host, port: port, path: path);
+        baseUri = Uri(host: host, port: port, path: path);
       } else if (path != null) {
-        _baseUri = uri.replace(path: path);
+        baseUri = uri.replace(path: path);
       } else {
-        _baseUri = uri;
+        baseUri = uri;
       }
     } else {
-      _baseUri = Uri(scheme: protocol, host: host, port: port, path: path);
+      baseUri = Uri(scheme: protocol, host: host, port: port, path: path);
     }
     httpClient.addCredentials(
-        _baseUri, '', HttpClientBasicCredentials(user, password));
+        baseUri, '', HttpClientBasicCredentials(user, password));
   }
-
-  late final Uri _baseUri;
 
   String _cwd = '/';
 
   /// get url from given [path]
   String getUrl(String path) =>
-      path.startsWith('/') ? '$_baseUri$path' : '$_baseUri$_cwd$path';
+      path.startsWith('/') ? '$baseUri$path' : '$baseUri$_cwd$path';
 
   /// change current dir to the given [path], you should make sure the dir exist
   void cd(String path) {
