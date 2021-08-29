@@ -248,10 +248,28 @@ class Client {
     await _upload(await File(path).readAsBytes(), remotePath);
   }
 
+  /// download [remotePath] as a `Stream<List<int>>`
+  Future<HttpClientResponse> downloadStream(String remotePath) async {
+    return _send('GET', remotePath, [200]);
+  }
+
   /// download [remotePath] to local file [localFilePath]
-  Future download(String remotePath, String localFilePath) async {
-    HttpClientResponse response = await _send('GET', remotePath, [200]);
-    await response.pipe(new File(localFilePath).openWrite());
+  Future<void> download(String remotePath, String localFilePath,
+      {Function(int bytes, int total)? progress}) async {
+    HttpClientResponse response = await downloadStream(remotePath);
+    final sink = new File(localFilePath).openWrite();
+    if (progress == null) {
+      await response.pipe(sink);
+    } else {
+      int bytes = 0;
+      final total = response.contentLength;
+      progress(bytes, total);
+      await for (List<int> data in response) {
+        bytes += data.length;
+        sink.add(data);
+        progress(bytes, total);
+      }
+    }
   }
 
   /// download [remotePath] and store the response file contents to String
