@@ -13,7 +13,14 @@ class FileInfo {
   ///
   /// NOTE: all href values from [parseXmlList] will be unique and will never
   /// be empty.
-  final String href;
+  final String rawHref;
+
+  final String rootPath;
+
+  /// Contains the [rawHref], but without the [rootPath] (if set)
+  late final String href = rootPath.isNotEmpty && rawHref.startsWith(rootPath)
+      ? rawHref.substring(rootPath.length)
+      : rawHref;
 
   /// Contains the Content-Type of the instance
   ///
@@ -90,7 +97,7 @@ class FileInfo {
   final String _lastModified;
 
   FileInfo._(
-    this.href,
+    this.rawHref,
     this._creationDate,
     this.displayName,
     this._contentLength,
@@ -98,13 +105,14 @@ class FileInfo {
     this.etag,
     this._lastModified,
     this._isCollection,
+    this.rootPath,
   );
 
   @override
   bool operator ==(Object other) {
     return identical(this, other) ||
         other is FileInfo &&
-            other.href == href &&
+            other.rawHref == rawHref &&
             other._creationDate == _creationDate &&
             other.displayName == displayName &&
             other._contentLength == _contentLength &&
@@ -117,7 +125,7 @@ class FileInfo {
   @override
   int get hashCode => hasEtag
       ? etag!.hashCode
-      : hashValues(href, _creationDate, displayName, _contentLength,
+      : hashValues(rawHref, _creationDate, displayName, _contentLength,
           contentType, etag, _lastModified, _isCollection);
 
   @override
@@ -148,7 +156,8 @@ class FileInfo {
   static final _200pattern = RegExp(r'\b200\b');
 
   /// Returns a [FileInfo] instance after parsing the element's stats
-  static FileInfo? fromXmlElement(xml.XmlElement element) {
+  static FileInfo? fromXmlElement(xml.XmlElement element,
+      {String rootPath = ''}) {
     String href = _findSingle(element, 'href')?.text ?? '';
     if (href.isEmpty) {
       // If there's no href we bail early
@@ -209,6 +218,7 @@ class FileInfo {
         etag,
         lastModified,
         isCollection,
+        rootPath,
       );
     }
 
@@ -217,7 +227,8 @@ class FileInfo {
 
   /// Parses given XML [String] and returns a lazy [Iterable] with all the
   /// available [FileInfo] items
-  static Iterable<FileInfo> parseXmlList(String xmlStr) sync* {
+  static Iterable<FileInfo> parseXmlList(String xmlStr,
+      {String rootPath = ''}) sync* {
     // Parse the XML document
     final xmlDocument = xml.XmlDocument.parse(xmlStr);
 
@@ -225,9 +236,9 @@ class FileInfo {
 
     // Iterate over the responses and create FileInfo instances
     for (final response in _findAll(xmlDocument, 'response')) {
-      final item = fromXmlElement(response);
-      if (item != null && !set.contains(item.href)) {
-        set.add(item.href);
+      final item = fromXmlElement(response, rootPath: rootPath);
+      if (item != null && !set.contains(item.rawHref)) {
+        set.add(item.rawHref);
         yield item;
       }
     }

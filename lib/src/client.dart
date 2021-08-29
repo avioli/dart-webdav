@@ -31,6 +31,7 @@ class Client {
   HttpClient httpClient = new HttpClient();
   int maxAttempts;
   int maxRedirects;
+  late final String rootPath;
 
   /// Construct a new [Client].
   /// [path] will should be the root path you want to access.
@@ -49,19 +50,21 @@ class Client {
         assert(maxAttempts > 0),
         assert(maxRedirects >= 0) {
     _baseUrl = (protocol != null
-            ? '$protocol://$host${port != null ? ':$port' : ''}'
-            : host) +
-        (path ?? '');
-    httpClient.addCredentials(
-        Uri.parse(_baseUrl), '', HttpClientBasicCredentials(user, password));
+        ? '$protocol://$host${port != null ? ':$port' : ''}'
+        : host);
+    rootPath = path ?? '';
+    httpClient.addCredentials(Uri.parse('$_baseUrl$rootPath'), '',
+        HttpClientBasicCredentials(user, password));
   }
 
-  late String _baseUrl;
+  late final String _baseUrl;
+
   String _cwd = '/';
 
   /// get url from given [path]
-  String getUrl(String path) =>
-      path.startsWith('/') ? _baseUrl + path : '$_baseUrl$_cwd$path';
+  String getUrl(String path) => path.startsWith('/')
+      ? '$_baseUrl$rootPath$path'
+      : '$_baseUrl$rootPath$_cwd$path';
 
   /// change current dir to the given [path], you should make sure the dir exist
   void cd(String path) {
@@ -262,7 +265,7 @@ class Client {
     HttpClientResponse response =
         await _send('PROPFIND', path ?? '/', [207], headers: {'Depth': depth});
     final xml = await response.transform(utf8.decoder).join();
-    final iterator = FileInfo.parseXmlList(xml);
+    final iterator = FileInfo.parseXmlList(xml, rootPath: rootPath);
     if (depth == 0) {
       yield iterator.first;
     } else {
